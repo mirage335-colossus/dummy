@@ -126,24 +126,24 @@ jobs:
 # TODO: pattern or urandom ...
 # TODO: gh shell release ...
       # https://github.com/cli/cli/issues/3252
-      - name: release!
-        shell: bash
-        run: |
-          mkdir -p ./_local
-          dd if=/dev/urandom of=./_local/garbage1 bs=1000000 count=1925
-          dd if=/dev/urandom of=./_local/garbage2 bs=1000000 count=1925
-          ./ubiquitous_bash.sh _pattern_recovery_write-32768 ./_local/pattern1 1835
-          ./ubiquitous_bash.sh _pattern_recovery_write-32768 ./_local/pattern2 1835
-          gh release create build-${{ github.run_id }}-${{ github.run_attempt }} --title build --notes ""
-          bash -c '
-          gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/garbage1 &
-          gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/garbage2 &
-          gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/pattern1 &
-          gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/pattern2 &
-          wait
-          '
-        env:
-          GH_TOKEN: ${{ github.token }}
+      #- name: release!
+        #shell: bash
+        #run: |
+          #mkdir -p ./_local
+          #dd if=/dev/urandom of=./_local/garbage1 bs=1000000 count=1925
+          #dd if=/dev/urandom of=./_local/garbage2 bs=1000000 count=1925
+          #./ubiquitous_bash.sh _pattern_recovery_write-32768 ./_local/pattern1 1835
+          #./ubiquitous_bash.sh _pattern_recovery_write-32768 ./_local/pattern2 1835
+          #gh release create build-${{ github.run_id }}-${{ github.run_attempt }} --title build --notes ""
+          #bash -c '
+          #gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/garbage1 &
+          #gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/garbage2 &
+          #gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/pattern1 &
+          #gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/pattern2 &
+          #wait
+          #'
+        #env:
+          #GH_TOKEN: ${{ github.token }}
 
 
 

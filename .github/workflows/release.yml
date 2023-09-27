@@ -145,3 +145,29 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+
+
+      - name: release!
+        shell: bash
+        run: |
+          mkdir -p ./_local
+          dd if=/dev/urandom of=./_local/fill_garbage1 bs=1000000 count=1925
+          dd if=/dev/urandom of=./_local/fill_garbage2 bs=1000000 count=1925
+          ./ubiquitous_bash.sh _pattern_recovery_write-32768 ./_local/fill_pattern1 1835
+          ./ubiquitous_bash.sh _pattern_recovery_write-32768 ./_local/fill_pattern2 1835
+          gh release create build-${{ github.run_id }}-${{ github.run_attempt }} --title build --notes ""
+          bash -c '
+          for currentFile in ./_local/fill*
+          do
+            gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} "$currentFile" &
+            while [[ $(jobs | wc -l) -ge 3 ]]
+            do
+              sleep 0.1
+            done
+          done
+          wait
+          '
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+

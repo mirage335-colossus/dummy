@@ -1,0 +1,232 @@
+
+
+name: release
+
+
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions
+permissions:
+  actions: write
+  checks: read
+  contents: write
+  deployments: read
+  issues: none
+  packages: read
+  pull-requests: read
+  repository-projects: read
+  security-events: none
+  statuses: read
+
+
+on:
+  #push:
+  workflow_dispatch:
+    inputs:
+      devfast:
+        type: boolean
+        default: true
+      skimfast:
+        type: boolean
+        default: false
+      qemuNoKVM:
+        type: boolean
+        default: false
+      runnerName:
+        required: false
+        default: ubuntu-latest-m
+        type: choice
+        options:
+        - ubuntu-latest
+        - ubuntu-latest-m
+
+# https://docs.github.com/en/actions/using-jobs/using-concurrency
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+  release:
+    runs-on: ${{ github.event.inputs.runnerName == '' && 'ubuntu-latest' || github.event.inputs.runnerName }}
+    # https://github.com/easimon/maximize-build-space
+    steps:
+      - name: users
+        shell: bash
+        run: |
+          sudo -u ubuntu -n bash -c 'sudo -n useradd runner --non-unique -u $UID -g $UID' || true
+          sudo -u ubuntu -n bash -c 'sudo -n groupadd runner --non-unique -g $UID' || true
+          sudo -u runner -n bash -c 'sudo -n echo $USER $UID' || true
+          true
+      # Apparently may increase buildJet 'runner' to 77GB (instead of 61GB).
+      # Apparently may increase Github Actions 'runner' to 59GB (instead of 31GB) .
+      - name: Maximize build space
+        if: ${{ github.event.inputs.runnerName != 'ubuntu-latest-m' }}
+        uses: easimon/maximize-build-space@master
+        with:
+          ##root-reserve-mb: 512
+          ##root-reserve-mb: 1450
+          ##root-reserve-mb: 950
+          #root-reserve-mb: 1750
+          root-reserve-mb: 1625
+          ##temp-reserve-mb: 100
+          ##temp-reserve-mb: 300
+          ##temp-reserve-mb: 300
+          #temp-reserve-mb: 700
+          temp-reserve-mb: 50
+          ##swap-size-mb: 128
+          ##swap-size-mb: 192
+          #swap-size-mb: 8
+          swap-size-mb: 2
+          #swap-size-mb: 384
+          #remove-dotnet: ${{ github.event.inputs.runnerName != 'ubuntu-latest-m' }}
+          remove-dotnet: 'true'
+          #remove-android: ${{ github.event.inputs.runnerName != 'ubuntu-latest-m' }}
+          remove-android: 'true'
+          #remove-haskell: ${{ github.event.inputs.runnerName != 'ubuntu-latest-m' }}
+          remove-haskell: 'true'
+          #remove-codeql: ${{ github.event.inputs.runnerName != 'ubuntu-latest-m' }}
+          remove-codeql: 'true'
+          #remove-docker-images: ${{ github.event.inputs.runnerName != 'ubuntu-latest-m' }}
+          remove-docker-images: 'true'
+      # https://github.com/orgs/community/discussions/8305
+      # https://github.blog/changelog/2023-02-23-hardware-accelerated-android-virtualization-on-actions-windows-and-linux-larger-hosted-runners/
+      # https://github.com/actions/runner-images/discussions/7191
+      - name: Enable KVM group perms
+        if: ${{ github.event.inputs.runnerName == 'ubuntu-latest-m' }}
+        shell: bash
+        run: |
+          #echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo -n tee /etc/udev/rules.d/99-kvm4all.rules
+          echo 'KERNEL=="kvm", GROUP="docker", MODE="0664", OPTIONS+="static_node=kvm"' | sudo -n tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo -n udevadm control --reload-rules
+          sudo -n udevadm trigger --name-match=kvm
+          sudo -n apt-get update
+          sudo -n apt-get install -y libvirt-clients libvirt-daemon-system libvirt-daemon virtinst bridge-utils qemu qemu-system-x86
+          sudo -n usermod -a -G kvm $USER
+          sudo -n usermod -a -G libvirt $USER
+          sudo -n usermod -a -G docker $USER
+          sudo -n adduser $USER kvm
+          #sudo -n chown -R $USER:kvm /dev/kvm
+          sudo -n chown -R $USER:docker /dev/kvm
+          ls -l /dev/kvm
+          ls -l /dev/kvm*
+          echo $USER
+          groups
+          sudo -n lsmod | grep kvm
+          sudo -n modprobe -r kvm_intel
+          sudo -n modprobe -r kvm_amd
+          sudo -n modprobe -r kvm
+          ( grep --color vmx /proc/cpuinfo && sudo -n modprobe kvm_intel ) || ( grep --color svm /proc/cpuinfo && sudo -n modprobe kvm_amd )
+          sudo -n modprobe kvm
+          sudo -n lsmod | grep kvm
+          #sudo -n chown -R $USER:kvm /dev/kvm
+          sudo -n chown -R $USER:docker /dev/kvm
+          ls -l /dev/kvm
+          ls -l /dev/kvm*
+      - name: Check KVM group perms
+        if: ${{ github.event.inputs.runnerName == 'ubuntu-latest-m' }}
+        shell: bash
+        run: |
+          grep --color svm /proc/cpuinfo || true
+          grep --color vmx /proc/cpuinfo || true
+          sudo -n lsmod | grep kvm
+          ls -l /dev/kvm
+          ls -l /dev/kvm*
+          echo $USER
+          groups
+      - name: Check Network Services
+        if: ${{ github.event.inputs.runnerName == 'ubuntu-latest-m' }}
+        shell: bash
+        run: |
+          sudo -n netstat -l -p
+      - name: _getCore_ub
+        shell: bash
+        timeout-minutes: 90
+        run: |
+          mkdir -p ~/core/infrastructure
+          cd ~/core/infrastructure
+          git clone --depth 1 --recursive https://github.com/mirage335-colossus/ubiquitous_bash.git
+          cd ubiquitous_bash
+          ./_setupUbiquitous.bat
+          ./ubiquitous_bash.sh _custom_splice_opensslConfig
+      #- name: _getMinimal_cloud
+        #shell: bash
+        #run: |
+          #! ~/core/infrastructure/ubiquitous_bash/ubiquitous_bash.sh _getMinimal_cloud && exit 1
+          #true
+          #! sudo -n apt-get -y clean && exit 1
+          #df -h
+          #df -h /
+        #timeout-minutes: 90
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      # For VBoxManage for _convert . Otherwise historically not apparently necessary.
+      #- name: _getMost_ubuntu22-VBoxManage
+        #shell: bash
+        #run: |
+          ##! ./ubiquitous_bash.sh _getMost && exit 1
+          ##true
+          ##! sudo -n apt-get -y clean && exit 1
+          ##! ./ubiquitous_bash.sh _getMost_debian11_aptSources && exit 1
+          ##sudo -n apt-get update
+          ##! sudo -n apt-get -d install -y virtualbox-7.0 && exit 1
+          #! sudo -n ./ubiquitous_bash.sh _getMost_ubuntu22-VBoxManage && exit 1
+          #df -h
+          #df -h /
+        #timeout-minutes: 355
+      #- name: _getMost-xvfb
+        #shell: bash
+        #run: |
+          ##! ./ubiquitous_bash.sh _getMost && exit 1
+          ##true
+          ##! sudo -n apt-get -y clean && exit 1
+          ##! ./ubiquitous_bash.sh _getMost_debian11_aptSources && exit 1
+          ##sudo -n apt-get update
+          ##! sudo -n apt-get -d install -y virtualbox-7.0 && exit 1
+          ##! sudo -n ./ubiquitous_bash.sh _getMost_ubuntu22-VBoxManage && exit 1
+          #sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install --install-recommends -y xvfb
+          #df -h
+          #df -h /
+        #timeout-minutes: 355
+      
+      - name: _test_hash_legacy
+        shell: bash
+        run: |
+          if [[ -e "/etc/ssl/openssl_legacy.cnf" ]]
+          then
+              echo -n | env OPENSSL_CONF="/etc/ssl/openssl_legacy.cnf" openssl dgst -whirlpool -binary | xxd -p -c 256
+              exit ${PIPESTATUS[0]}
+          else
+              echo -n | openssl dgst -whirlpool -binary | xxd -p -c 256
+              exit ${PIPESTATUS[0]}
+          fi
+      
+      - name: Force KVM group perms
+        if: ${{ github.event.inputs.runnerName == 'ubuntu-latest-m' }}
+        shell: bash
+        run: |
+          sudo -n ls -l /dev/kvm
+          sudo -n ls -l /dev/kvm*
+          sudo -n chown -R $USER:docker /dev/kvm
+          sudo -n chmod 664 /dev/kvm
+          echo
+          #grep --color svm /proc/cpuinfo || true
+          #grep --color vmx /proc/cpuinfo || true
+          sudo -n lsmod | grep kvm
+          ls -l /dev/kvm
+          ls -l /dev/kvm*
+          echo $USER
+          groups
+          echo
+
+        
+# TODO: pattern or urandom ...
+# TODO: gh shell release ...
+
+
+      - name: release!
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: build-${{ github.run_id }}-${{ github.run_attempt }}
+          name: build
+          files: |
+            ./_local/garbage
+
+

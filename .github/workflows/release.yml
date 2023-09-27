@@ -227,16 +227,15 @@ jobs:
           mkdir -p ./_local
           dd if=/dev/urandom of=./_local/garbage1 bs=1000000 count=1925
           dd if=/dev/urandom of=./_local/garbage2 bs=1000000 count=1925
-          gh release create build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/garbage -R mirage335_colossus/dummy
-
-
-      - name: release!
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: build-${{ github.run_id }}-${{ github.run_attempt }}
-          name: build
-          files: |
-            #./_local/pattern
-            ./_local/garbage
+          _pattern_recovery_write-32768 ./_local/pattern1 1925000000
+          _pattern_recovery_write-32768 ./_local/pattern2 1925000000
+          gh release create build-${{ github.run_id }}-${{ github.run_attempt }} --title build --notes ""
+          bash -c '
+          gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/garbage1 &
+          gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/garbage2 &
+          gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/pattern1 &
+          gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/pattern2 &
+          wait
+          '
 
 

@@ -26,7 +26,7 @@ on:
         default: true
       skimfast:
         type: boolean
-        default: false
+        default: true
       qemuNoKVM:
         type: boolean
         default: false
@@ -86,56 +86,6 @@ jobs:
           remove-codeql: 'true'
           #remove-docker-images: ${{ github.event.inputs.runnerName != 'ubuntu-latest-m' }}
           remove-docker-images: 'true'
-      # https://github.com/orgs/community/discussions/8305
-      # https://github.blog/changelog/2023-02-23-hardware-accelerated-android-virtualization-on-actions-windows-and-linux-larger-hosted-runners/
-      # https://github.com/actions/runner-images/discussions/7191
-      - name: Enable KVM group perms
-        if: ${{ github.event.inputs.runnerName == 'ubuntu-latest-m' }}
-        shell: bash
-        run: |
-          #echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo -n tee /etc/udev/rules.d/99-kvm4all.rules
-          echo 'KERNEL=="kvm", GROUP="docker", MODE="0664", OPTIONS+="static_node=kvm"' | sudo -n tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo -n udevadm control --reload-rules
-          sudo -n udevadm trigger --name-match=kvm
-          sudo -n apt-get update
-          sudo -n apt-get install -y libvirt-clients libvirt-daemon-system libvirt-daemon virtinst bridge-utils qemu qemu-system-x86
-          sudo -n usermod -a -G kvm $USER
-          sudo -n usermod -a -G libvirt $USER
-          sudo -n usermod -a -G docker $USER
-          sudo -n adduser $USER kvm
-          #sudo -n chown -R $USER:kvm /dev/kvm
-          sudo -n chown -R $USER:docker /dev/kvm
-          ls -l /dev/kvm
-          ls -l /dev/kvm*
-          echo $USER
-          groups
-          sudo -n lsmod | grep kvm
-          sudo -n modprobe -r kvm_intel
-          sudo -n modprobe -r kvm_amd
-          sudo -n modprobe -r kvm
-          ( grep --color vmx /proc/cpuinfo && sudo -n modprobe kvm_intel ) || ( grep --color svm /proc/cpuinfo && sudo -n modprobe kvm_amd )
-          sudo -n modprobe kvm
-          sudo -n lsmod | grep kvm
-          #sudo -n chown -R $USER:kvm /dev/kvm
-          sudo -n chown -R $USER:docker /dev/kvm
-          ls -l /dev/kvm
-          ls -l /dev/kvm*
-      - name: Check KVM group perms
-        if: ${{ github.event.inputs.runnerName == 'ubuntu-latest-m' }}
-        shell: bash
-        run: |
-          grep --color svm /proc/cpuinfo || true
-          grep --color vmx /proc/cpuinfo || true
-          sudo -n lsmod | grep kvm
-          ls -l /dev/kvm
-          ls -l /dev/kvm*
-          echo $USER
-          groups
-      - name: Check Network Services
-        if: ${{ github.event.inputs.runnerName == 'ubuntu-latest-m' }}
-        shell: bash
-        run: |
-          sudo -n netstat -l -p
       - name: _getCore_ub
         shell: bash
         timeout-minutes: 90
@@ -158,34 +108,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: recursive
-      # For VBoxManage for _convert . Otherwise historically not apparently necessary.
-      #- name: _getMost_ubuntu22-VBoxManage
-        #shell: bash
-        #run: |
-          ##! ./ubiquitous_bash.sh _getMost && exit 1
-          ##true
-          ##! sudo -n apt-get -y clean && exit 1
-          ##! ./ubiquitous_bash.sh _getMost_debian11_aptSources && exit 1
-          ##sudo -n apt-get update
-          ##! sudo -n apt-get -d install -y virtualbox-7.0 && exit 1
-          #! sudo -n ./ubiquitous_bash.sh _getMost_ubuntu22-VBoxManage && exit 1
-          #df -h
-          #df -h /
-        #timeout-minutes: 355
-      #- name: _getMost-xvfb
-        #shell: bash
-        #run: |
-          ##! ./ubiquitous_bash.sh _getMost && exit 1
-          ##true
-          ##! sudo -n apt-get -y clean && exit 1
-          ##! ./ubiquitous_bash.sh _getMost_debian11_aptSources && exit 1
-          ##sudo -n apt-get update
-          ##! sudo -n apt-get -d install -y virtualbox-7.0 && exit 1
-          ##! sudo -n ./ubiquitous_bash.sh _getMost_ubuntu22-VBoxManage && exit 1
-          #sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install --install-recommends -y xvfb
-          #df -h
-          #df -h /
-        #timeout-minutes: 355
       
       - name: _test_hash_legacy
         shell: bash
@@ -199,23 +121,6 @@ jobs:
               exit ${PIPESTATUS[0]}
           fi
       
-      - name: Force KVM group perms
-        if: ${{ github.event.inputs.runnerName == 'ubuntu-latest-m' }}
-        shell: bash
-        run: |
-          sudo -n ls -l /dev/kvm
-          sudo -n ls -l /dev/kvm*
-          sudo -n chown -R $USER:docker /dev/kvm
-          sudo -n chmod 664 /dev/kvm
-          echo
-          #grep --color svm /proc/cpuinfo || true
-          #grep --color vmx /proc/cpuinfo || true
-          sudo -n lsmod | grep kvm
-          ls -l /dev/kvm
-          ls -l /dev/kvm*
-          echo $USER
-          groups
-          echo
 
         
 # TODO: pattern or urandom ...
@@ -227,8 +132,8 @@ jobs:
           mkdir -p ./_local
           dd if=/dev/urandom of=./_local/garbage1 bs=1000000 count=1925
           dd if=/dev/urandom of=./_local/garbage2 bs=1000000 count=1925
-          _pattern_recovery_write-32768 ./_local/pattern1 1925000000
-          _pattern_recovery_write-32768 ./_local/pattern2 1925000000
+          ./ubiquitous_bash.sh _pattern_recovery_write-32768 ./_local/pattern1 1925000000
+          ./ubiquitous_bash.sh _pattern_recovery_write-32768 ./_local/pattern2 1925000000
           gh release create build-${{ github.run_id }}-${{ github.run_attempt }} --title build --notes ""
           bash -c '
           gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} ./_local/garbage1 &

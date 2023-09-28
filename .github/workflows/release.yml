@@ -141,7 +141,7 @@ jobs:
           bash -c '
           for currentFile in ./_local/fill*
           do
-            gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} "$currentFile" &
+            ./ubiquitous_bash.sh _stopwatch gh release upload build-${{ github.run_id }}-${{ github.run_attempt }} "$currentFile" &
             while [[ $(jobs | wc -l) -ge 3 ]]
             do
               sleep 0.1
